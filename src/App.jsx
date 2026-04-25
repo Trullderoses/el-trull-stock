@@ -73,7 +73,7 @@ function LoginScreen({ onLogin }) {
 }
 
 export default function StockBebidas() {
-  const [usuario, setUsuario] = useState(() => localStorage.getItem("eltrull_usuario") || "");
+  const [usuario, setUsuario] = useState(() => { try { return localStorage.getItem("eltrull_usuario") || ""; } catch(e) { return ""; } });
   const [bebidas, setBebidas] = useState([]);
   const [categorias, setCategorias] = useState(defaultCategorias);
   const [filtro, setFiltro] = useState("Todas");
@@ -91,16 +91,14 @@ export default function StockBebidas() {
   const [cargandoHist, setCargandoHist] = useState(false);
 
   const handleLogin = (nombre) => {
-    localStorage.setItem("eltrull_usuario", nombre);
+    try { localStorage.setItem("eltrull_usuario", nombre); } catch(e) {}
     setUsuario(nombre);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("eltrull_usuario");
+    try { localStorage.removeItem("eltrull_usuario"); } catch(e) {}
     setUsuario("");
   };
-
-  if (!usuario) return <LoginScreen onLogin={handleLogin} />;
 
   useEffect(() => {
     const unsubBebidas = onSnapshot(collection(db, "bebidas"), async (snap) => {
@@ -265,6 +263,8 @@ export default function StockBebidas() {
     XLSX.writeFile(wb, `stock-bebidas-${fecha}.xlsx`);
     showToast("Excel exportado");
   };
+
+  if (!usuario) return <LoginScreen onLogin={handleLogin} />;
 
   if (cargando) return (
     <div style={{ minHeight: "100vh", background: "#0a0e1a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
