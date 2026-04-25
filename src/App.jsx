@@ -36,7 +36,44 @@ const estadoConfig = {
 const today = () => new Date().toISOString().split("T")[0];
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; };
 
+function LoginScreen({ onLogin }) {
+  const [nombre, setNombre] = useState("");
+  const [error, setError] = useState("");
+  const handleLogin = () => {
+    if (!nombre.trim()) return setError("Por favor escribe tu nombre");
+    onLogin(nombre.trim());
+  };
+  return (
+    <div style={{ minHeight: "100vh", background: "#0a0e1a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: 20 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');`}</style>
+      <div style={{ background: "#111626", border: "1.5px solid #1e2540", borderRadius: 24, padding: "40px 36px", width: "100%", maxWidth: 400, textAlign: "center" }}>
+        <div style={{ fontSize: 52, marginBottom: 16 }}>🍹</div>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, fontWeight: 400, color: "#e8eaf0", marginBottom: 6 }}>
+          Stock Bebidas
+        </h1>
+        <p style={{ fontSize: 14, color: "#4f7fff", marginBottom: 32 }}>Restaurante El Trull</p>
+        <p style={{ fontSize: 14, color: "#7a84a0", marginBottom: 24 }}>¿Cómo te llamas?</p>
+        <input
+          style={{ background: "#151b30", border: "1.5px solid #252d48", borderRadius: 12, color: "#e8eaf0", fontFamily: "inherit", fontSize: 16, padding: "14px 18px", outline: "none", width: "100%", marginBottom: 8, textAlign: "center" }}
+          placeholder="Tu nombre..."
+          value={nombre}
+          onChange={e => { setNombre(e.target.value); setError(""); }}
+          onKeyDown={e => e.key === "Enter" && handleLogin()}
+          autoFocus
+        />
+        {error && <p style={{ fontSize: 12, color: "#ff3b5c", marginBottom: 8 }}>{error}</p>}
+        <button
+          onClick={handleLogin}
+          style={{ background: "#4f7fff", color: "white", border: "none", borderRadius: 12, padding: "14px", width: "100%", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 8, fontFamily: "inherit" }}>
+          Entrar →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function StockBebidas() {
+  const [usuario, setUsuario] = useState(() => localStorage.getItem("eltrull_usuario") || "");
   const [bebidas, setBebidas] = useState([]);
   const [categorias, setCategorias] = useState(defaultCategorias);
   const [filtro, setFiltro] = useState("Todas");
@@ -44,7 +81,7 @@ export default function StockBebidas() {
   const [modal, setModal] = useState(null);
   const [seleccionada, setSeleccionada] = useState(null);
   const [form, setForm] = useState({ nombre: "", categoria: "", cantidad: "", minimo: "", unidad: "botellas", precio: "" });
-  const [ajuste, setAjuste] = useState({ tipo: "entrada", cantidad: "", usuario: "", nota: "" });
+  const [ajuste, setAjuste] = useState({ tipo: "entrada", cantidad: "", nota: "" });
   const [toast, setToast] = useState(null);
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [catError, setCatError] = useState("");
@@ -52,6 +89,18 @@ export default function StockBebidas() {
   const [historial, setHistorial] = useState([]);
   const [histFiltro, setHistFiltro] = useState({ desde: daysAgo(7), hasta: today(), rapido: "7d" });
   const [cargandoHist, setCargandoHist] = useState(false);
+
+  const handleLogin = (nombre) => {
+    localStorage.setItem("eltrull_usuario", nombre);
+    setUsuario(nombre);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("eltrull_usuario");
+    setUsuario("");
+  };
+
+  if (!usuario) return <LoginScreen onLogin={handleLogin} />;
 
   useEffect(() => {
     const unsubBebidas = onSnapshot(collection(db, "bebidas"), async (snap) => {
@@ -152,7 +201,7 @@ export default function StockBebidas() {
       cantidadAnterior: cantAnterior,
       cantidadNueva: cantNueva,
       unidad: seleccionada.unidad,
-      usuario: ajuste.usuario || "Sin especificar",
+      usuario: usuario,
       nota: ajuste.nota || "",
       fecha: Timestamp.now(),
     });
@@ -278,7 +327,12 @@ export default function StockBebidas() {
             </div>
             <p style={{ fontSize: 12, color: "#5a6480" }}>Control de inventario · {bebidas.length} productos · <span style={{ color: "#34d399" }}>● Sincronizado</span></p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2540", borderRadius: 10, padding: "8px 14px" }}>
+              <span style={{ fontSize: 16 }}>👤</span>
+              <span style={{ fontSize: 13, color: "#e8eaf0", fontWeight: 500 }}>{usuario}</span>
+              <button onClick={handleLogout} style={{ background: "none", border: "none", color: "#5a6480", cursor: "pointer", fontSize: 12, padding: "0 0 0 4px" }} title="Cambiar usuario">✕</button>
+            </div>
             <button className="btn" onClick={() => setModal("historial")} style={{ background: "#1a1f35", color: "#a78bfa", padding: "10px 16px", fontSize: 13, border: "1.5px solid #2a2050", display: "flex", alignItems: "center", gap: 7 }}>
               📈 Historial
             </button>
@@ -445,10 +499,6 @@ export default function StockBebidas() {
               <div>
                 <label style={{ fontSize: 12, color: "#5a6480", display: "block", marginBottom: 6 }}>Cantidad ({seleccionada.unidad})</label>
                 <input className="input" type="number" min="1" placeholder="0" value={ajuste.cantidad} onChange={e => setAjuste({ ...ajuste, cantidad: e.target.value })} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#5a6480", display: "block", marginBottom: 6 }}>Quién lo hace <span style={{ color: "#3a4460" }}>(opcional)</span></label>
-                <input className="input" placeholder="Ej: Maria, Hernan..." value={ajuste.usuario} onChange={e => setAjuste({ ...ajuste, usuario: e.target.value })} />
               </div>
               <div>
                 <label style={{ fontSize: 12, color: "#5a6480", display: "block", marginBottom: 6 }}>Nota <span style={{ color: "#3a4460" }}>(opcional)</span></label>
