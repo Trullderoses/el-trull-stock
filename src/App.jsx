@@ -154,10 +154,21 @@ export default function StockBebidas() {
 
   const showToast = (msg, tipo = "ok") => { setToast({ msg, tipo }); setTimeout(() => setToast(null), 3000); };
 
+  const [sortConfig, setSortConfig] = useState({ campo: "nombre", dir: "asc" });
+
+  const toggleSort = (campo) => {
+    setSortConfig(prev => ({ campo, dir: prev.campo === campo && prev.dir === "asc" ? "desc" : "asc" }));
+  };
+
   const bebidasFiltradas = bebidas.filter(b => {
     const matchCat = filtro === "Todas" || b.categoria === filtro;
     const matchBus = b.nombre.toLowerCase().includes(busqueda.toLowerCase());
     return matchCat && matchBus;
+  }).sort((a, b) => {
+    const valA = a[sortConfig.campo] ?? "";
+    const valB = b[sortConfig.campo] ?? "";
+    const cmp = typeof valA === "number" ? valA - valB : String(valA).localeCompare(String(valB), "es");
+    return sortConfig.dir === "asc" ? cmp : -cmp;
   });
 
   const stats = {
@@ -167,8 +178,8 @@ export default function StockBebidas() {
     ok: bebidas.filter(b => getEstado(b.cantidad, b.minimo) === "ok").length,
   };
 
-  const abrirNueva = () => { setForm({ nombre:"", categoria:categorias[0], cantidad:"", minimo:"", unidad:"botellas", precio:"" }); setModal("nueva"); };
-  const abrirEditar = (b) => { setSeleccionada(b); setForm({ nombre:b.nombre, categoria:b.categoria, cantidad:b.cantidad, minimo:b.minimo, unidad:b.unidad, precio:b.precio }); setModal("editar"); };
+  const abrirNueva = () => { setForm({ nombre:"", categoria:categorias[0], cantidad:"", minimo:"", unidad:"botellas", precio:"", proveedor:"" }); setModal("nueva"); };
+  const abrirEditar = (b) => { setSeleccionada(b); setForm({ nombre:b.nombre, categoria:b.categoria, cantidad:b.cantidad, minimo:b.minimo, unidad:b.unidad, precio:b.precio, proveedor:b.proveedor||"" }); setModal("editar"); };
   const abrirAjuste = (b) => { setSeleccionada(b); setAjuste({ tipo:"entrada", cantidad:"", nota:"" }); setModal("ajuste"); };
 
   const guardarNueva = async () => {
@@ -250,15 +261,26 @@ export default function StockBebidas() {
   }, {});
 
   const exportarExcel = () => {
+    const fmtFecha = (ts) => {
+      if (!ts) return "—";
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString("es-ES", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+    };
     const data = bebidas.map(b => ({
-      "Nombre": b.nombre, "Categoría": b.categoria, "Cantidad": b.cantidad,
-      "Unidad": b.unidad, "Stock Mínimo": b.minimo, "Precio (€)": b.precio,
+      "Nombre": b.nombre,
+      "Categoría": b.categoria,
+      "Proveedor": b.proveedor || "—",
+      "Cantidad": b.cantidad,
+      "Unidad": b.unidad,
+      "Stock Mínimo": b.minimo,
+      "Precio (€)": b.precio,
       "Valor Total (€)": +(b.cantidad * b.precio).toFixed(2),
       "Estado": estadoConfig[getEstado(b.cantidad, b.minimo)].label,
+      "Últ. variación": fmtFecha(b.ultimaVariacion),
     }));
     const wb = XLSX.utils.book_new();
     const ws1 = XLSX.utils.json_to_sheet(data);
-    ws1["!cols"] = [{ wch:22 },{ wch:20 },{ wch:10 },{ wch:10 },{ wch:14 },{ wch:12 },{ wch:14 },{ wch:14 }];
+    ws1["!cols"] = [{ wch:22 },{ wch:20 },{ wch:18 },{ wch:10 },{ wch:10 },{ wch:14 },{ wch:12 },{ wch:14 },{ wch:14 },{ wch:18 }];
     XLSX.utils.book_append_sheet(wb, ws1, "Stock Bebidas");
     XLSX.writeFile(wb, `stock-bebidas-${today()}.xlsx`);
     showToast("Excel exportado");
@@ -386,11 +408,28 @@ export default function StockBebidas() {
         </div>
 
         {/* Table Header */}
-        <div style={{ display:"grid", gridTemplateColumns: isAdmin ? "2fr 1.2fr 1fr 1fr 1fr 1fr 120px" : "2fr 1.2fr 1fr 1fr 1fr 1fr 60px", gap:12, padding:"6px 20px", marginBottom:6 }} className="hide-mobile">
-          {["Producto", "Categoría", "Stock", "Mínimo", "Estado", "Últ. variación", ""].map(h => (
-            <span key={h} style={{ fontSize:10, fontWeight:600, color:"#3a4460", textTransform:"uppercase", letterSpacing:"0.09em" }}>{h}</span>
-          ))}
-        </div>
+        {(() => {
+          const SortBtn = ({ campo, label }) => {
+            const active = sortConfig.campo === campo;
+            return (
+              <span onClick={() => isAdmin && toggleSort(campo)}
+                style={{ fontSize:10, fontWeight:600, color: active ? "#4f7fff" : "#3a4460", textTransform:"uppercase", letterSpacing:"0.09em", cursor: isAdmin ? "pointer" : "default", display:"flex", alignItems:"center", gap:3, userSelect:"none" }}>
+                {label} {isAdmin && <span style={{ opacity: active ? 1 : 0.3 }}>{active && sortConfig.dir === "desc" ? "↓" : "↑"}</span>}
+              </span>
+            );
+          };
+          return (
+            <div style={{ display:"grid", gridTemplateColumns: isAdmin ? "2fr 1.2fr 1fr 1fr 1fr 1fr 120px" : "2fr 1.2fr 1fr 1fr 1fr 1fr 60px", gap:12, padding:"6px 20px", marginBottom:6 }} className="hide-mobile">
+              <SortBtn campo="nombre" label="Producto" />
+              <SortBtn campo="categoria" label="Categoría" />
+              <SortBtn campo="cantidad" label="Stock" />
+              <SortBtn campo="minimo" label="Mínimo" />
+              <SortBtn campo="estado" label="Estado" />
+              <span style={{ fontSize:10, fontWeight:600, color:"#3a4460", textTransform:"uppercase", letterSpacing:"0.09em" }}>Últ. variación</span>
+              <span></span>
+            </div>
+          );
+        })()}
 
         {bebidasFiltradas.length === 0 ? (
           <div style={{ textAlign:"center", padding:"60px 20px", color:"#3a4460" }}>
@@ -406,7 +445,10 @@ export default function StockBebidas() {
                 <div key={b.id} className={`card-row ${!isAdmin ? "card-row-worker" : ""}`}>
                   <div>
                     <div style={{ fontWeight:500, fontSize:14 }}>{b.nombre}</div>
-                    {isAdmin && <div style={{ fontSize:11, color:"#5a6480", marginTop:2 }}>{b.precio.toFixed(2)} € / {b.unidad}</div>}
+                    {isAdmin && <div style={{ fontSize:11, color:"#5a6480", marginTop:2 }}>
+                      {b.precio.toFixed(2)} € / {b.unidad}
+                      {b.proveedor && <span style={{ marginLeft:8, color:"#4a5580" }}>· {b.proveedor}</span>}
+                    </div>}
                   </div>
                   <span className="pill" style={{ background:"rgba(79,127,255,0.1)", color:"#6a9fff", fontSize:11 }}>{b.categoria}</span>
                   <div>
@@ -486,6 +528,10 @@ export default function StockBebidas() {
               <div>
                 <label style={{ fontSize:12, color:"#5a6480", display:"block", marginBottom:6 }}>Precio unitario (€)</label>
                 <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.precio} onChange={e => setForm({ ...form, precio:e.target.value })} />
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"#5a6480", display:"block", marginBottom:6 }}>Proveedor <span style={{ color:"#3a4460" }}>(opcional)</span></label>
+                <input className="input" placeholder="Ej: Mahou, Codorniu, Estrella..." value={form.proveedor} onChange={e => setForm({ ...form, proveedor:e.target.value })} />
               </div>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:22, justifyContent:"flex-end" }}>
