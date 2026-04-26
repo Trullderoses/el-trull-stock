@@ -115,6 +115,7 @@ export default function StockBebidas() {
   const [historial, setHistorial] = useState([]);
   const [histFiltro, setHistFiltro] = useState({ desde: daysAgo(7), hasta: today(), rapido:"7d" });
   const [cargandoHist, setCargandoHist] = useState(false);
+  const [editingCat, setEditingCat] = useState(null); // { original, nuevo }
 
   const handleLogin = (nombre, rol) => {
     try { localStorage.setItem("eltrull_usuario", nombre); localStorage.setItem("eltrull_rol", rol); } catch(e) {}
@@ -187,7 +188,7 @@ export default function StockBebidas() {
     if (!cant || cant <= 0) return showToast("Ingresa una cantidad válida", "error");
     const cantAnterior = seleccionada.cantidad;
     const cantNueva = ajuste.tipo === "entrada" ? cantAnterior + cant : Math.max(0, cantAnterior - cant);
-    await setDoc(doc(db, "bebidas", seleccionada.id), { ...seleccionada, cantidad: cantNueva });
+    await setDoc(doc(db, "bebidas", seleccionada.id), { ...seleccionada, cantidad: cantNueva, ultimaVariacion: Timestamp.now() });
     await addDoc(collection(db, "historial"), {
       bebidaId: seleccionada.id, bebidaNombre: seleccionada.nombre, categoria: seleccionada.categoria,
       tipo: ajuste.tipo, cantidad: cant, cantidadAnterior: cantAnterior, cantidadNueva: cantNueva,
@@ -210,6 +211,27 @@ export default function StockBebidas() {
     await deleteDoc(doc(db, "categorias", cat));
     if (filtro === cat) setFiltro("Todas");
     showToast(`Categoría "${cat}" eliminada`);
+  };
+
+  const renombrarCategoria = async () => {
+    if (!editingCat) return;
+    const { original, nuevo } = editingCat;
+    const nuevoNombre = nuevo.trim();
+    if (!nuevoNombre) return showToast("El nombre no puede estar vacío", "error");
+    if (nuevoNombre === original) { setEditingCat(null); return; }
+    if (categorias.map(c => c.toLowerCase()).includes(nuevoNombre.toLowerCase())) return showToast("Esa categoría ya existe", "error");
+    // Crear nueva categoría con el nuevo nombre
+    await setDoc(doc(db, "categorias", nuevoNombre), { nombre: nuevoNombre });
+    // Actualizar todas las bebidas que tenían la categoría antigua
+    const bebidasAfectadas = bebidas.filter(b => b.categoria === original);
+    for (const b of bebidasAfectadas) {
+      await setDoc(doc(db, "bebidas", b.id), { ...b, categoria: nuevoNombre });
+    }
+    // Borrar la categoría antigua
+    await deleteDoc(doc(db, "categorias", original));
+    if (filtro === original) setFiltro(nuevoNombre);
+    setEditingCat(null);
+    showToast(`Categoría renombrada a "${nuevoNombre}"`);
   };
 
   const aplicarFiltroRapido = (tipo) => {
@@ -264,9 +286,9 @@ export default function StockBebidas() {
         .input { background:#151b30; border:1.5px solid #252d48; border-radius:10px; color:#e8eaf0; font-family:inherit; font-size:14px; padding:10px 14px; outline:none; width:100%; transition:border-color 0.2s; }
         .input:focus { border-color:#4f7fff; }
         .input option { background:#151b30; }
-        .card-row { display:grid; grid-template-columns:2fr 1.2fr 1fr 1fr 1fr 120px; align-items:center; gap:12px; padding:15px 20px; border-radius:14px; background:#111626; border:1.5px solid #1e2540; transition:all 0.2s; }
+        .card-row { display:grid; grid-template-columns:2fr 1.2fr 1fr 1fr 1fr 1fr 120px; align-items:center; gap:12px; padding:15px 20px; border-radius:14px; background:#111626; border:1.5px solid #1e2540; transition:all 0.2s; }
         .card-row:hover { border-color:#2e3860; background:#141928; }
-        .card-row-worker { grid-template-columns:2fr 1.2fr 1fr 1fr 1fr 60px; }
+        .card-row-worker { grid-template-columns:2fr 1.2fr 1fr 1fr 1fr 1fr 60px; }
         .pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
         .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(5px); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px; }
         .modal { background:#111626; border:1.5px solid #1e2540; border-radius:20px; padding:28px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; }
@@ -364,8 +386,8 @@ export default function StockBebidas() {
         </div>
 
         {/* Table Header */}
-        <div style={{ display:"grid", gridTemplateColumns: isAdmin ? "2fr 1.2fr 1fr 1fr 1fr 120px" : "2fr 1.2fr 1fr 1fr 1fr 60px", gap:12, padding:"6px 20px", marginBottom:6 }} className="hide-mobile">
-          {["Producto", "Categoría", "Stock", "Mínimo", "Estado", ""].map(h => (
+        <div style={{ display:"grid", gridTemplateColumns: isAdmin ? "2fr 1.2fr 1fr 1fr 1fr 1fr 120px" : "2fr 1.2fr 1fr 1fr 1fr 1fr 60px", gap:12, padding:"6px 20px", marginBottom:6 }} className="hide-mobile">
+          {["Producto", "Categoría", "Stock", "Mínimo", "Estado", "Últ. variación", ""].map(h => (
             <span key={h} style={{ fontSize:10, fontWeight:600, color:"#3a4460", textTransform:"uppercase", letterSpacing:"0.09em" }}>{h}</span>
           ))}
         </div>
@@ -393,6 +415,15 @@ export default function StockBebidas() {
                   </div>
                   <div style={{ fontSize:12, color:"#5a6480" }}>{b.minimo} {b.unidad}</div>
                   <span className="pill" style={{ background:cfg.bg, color:cfg.color }}>{cfg.label}</span>
+                  <div style={{ fontSize:11, color:"#5a6480" }}>
+                    {b.ultimaVariacion
+                      ? (() => {
+                          const d = b.ultimaVariacion.toDate ? b.ultimaVariacion.toDate() : new Date(b.ultimaVariacion);
+                          return d.toLocaleDateString("es-ES", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
+                        })()
+                      : <span style={{ color:"#3a4460" }}>—</span>
+                    }
+                  </div>
                   <div style={{ display:"flex", gap:5 }}>
                     <button className="icon-btn" onClick={() => abrirAjuste(b)} style={{ background:"rgba(52,211,153,0.1)", color:"#34d399" }} title="Ajustar stock">±</button>
                     {isAdmin && <>
@@ -586,7 +617,7 @@ export default function StockBebidas() {
         <div className="modal-bg" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2 style={{ fontFamily:"'DM Serif Display', serif", fontSize:22, marginBottom:6 }}>Gestionar Categorías</h2>
-            <p style={{ fontSize:13, color:"#5a6480", marginBottom:20 }}>Crea nuevas categorías o elimina las que no estén en uso.</p>
+            <p style={{ fontSize:13, color:"#5a6480", marginBottom:20 }}>Crea, edita o elimina categorías.</p>
             <div style={{ marginBottom:24 }}>
               <label style={{ fontSize:12, color:"#5a6480", display:"block", marginBottom:8 }}>Nueva categoría</label>
               <div style={{ display:"flex", gap:8 }}>
@@ -599,18 +630,38 @@ export default function StockBebidas() {
             </div>
             <div>
               <label style={{ fontSize:12, color:"#5a6480", display:"block", marginBottom:10 }}>Categorías existentes ({categorias.length})</label>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, maxHeight:240, overflowY:"auto" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:300, overflowY:"auto" }}>
                 {categorias.map(cat => {
                   const count = bebidas.filter(b => b.categoria === cat).length;
+                  const isEditing = editingCat?.original === cat;
                   return (
-                    <div key={cat} className="cat-tag">
-                      <span>{cat}</span>
-                      {count > 0 && <span style={{ fontSize:11, color:"#4f7fff", background:"rgba(79,127,255,0.12)", padding:"1px 7px", borderRadius:20 }}>{count}</span>}
-                      <button className="cat-tag-del" onClick={() => eliminarCategoria(cat)}>✕</button>
+                    <div key={cat} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:"#151b30", border:`1.5px solid ${isEditing ? "#4f7fff" : "#1e2540"}`, borderRadius:10 }}>
+                      {isEditing ? (
+                        <>
+                          <input
+                            className="input"
+                            value={editingCat.nuevo}
+                            onChange={e => setEditingCat({ ...editingCat, nuevo: e.target.value })}
+                            onKeyDown={e => { if (e.key === "Enter") renombrarCategoria(); if (e.key === "Escape") setEditingCat(null); }}
+                            autoFocus
+                            style={{ flex:1, padding:"6px 10px", fontSize:13 }}
+                          />
+                          <button className="btn" onClick={renombrarCategoria} style={{ background:"#34d399", color:"#0a0e1a", padding:"6px 12px", fontSize:12, whiteSpace:"nowrap" }}>✓ Guardar</button>
+                          <button className="btn" onClick={() => setEditingCat(null)} style={{ background:"#1e2540", color:"#7a84a0", padding:"6px 10px", fontSize:12 }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ flex:1, fontSize:13 }}>{cat}</span>
+                          {count > 0 && <span style={{ fontSize:11, color:"#4f7fff", background:"rgba(79,127,255,0.12)", padding:"1px 7px", borderRadius:20 }}>{count}</span>}
+                          <button onClick={() => setEditingCat({ original: cat, nuevo: cat })} style={{ width:26, height:26, borderRadius:6, background:"rgba(79,127,255,0.1)", color:"#4f7fff", border:"none", cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }} title="Renombrar">✏️</button>
+                          <button onClick={() => eliminarCategoria(cat)} style={{ width:26, height:26, borderRadius:6, background:"rgba(255,59,92,0.1)", color:"#ff3b5c", border:"none", cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", justifyContent:"center" }} title="Eliminar">🗑</button>
+                        </>
+                      )}
                     </div>
                   );
                 })}
               </div>
+              <p style={{ fontSize:11, color:"#3a4460", marginTop:10 }}>Al renombrar, todas las bebidas de esa categoría se actualizarán automáticamente.</p>
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", marginTop:22 }}>
               <button className="btn" onClick={() => setModal(null)} style={{ background:"#1e2540", color:"#a0aac0", padding:"10px 20px", fontSize:13 }}>Cerrar</button>
