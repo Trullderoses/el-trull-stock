@@ -199,7 +199,7 @@ export default function StockBebidas() {
     if (!cant || cant <= 0) return showToast("Ingresa una cantidad válida", "error");
     const cantAnterior = seleccionada.cantidad;
     const cantNueva = ajuste.tipo === "entrada" ? cantAnterior + cant : Math.max(0, cantAnterior - cant);
-    await setDoc(doc(db, "bebidas", seleccionada.id), { ...seleccionada, cantidad: cantNueva, ultimaVariacion: Timestamp.now() });
+    await setDoc(doc(db, "bebidas", seleccionada.id), { ...seleccionada, cantidad: cantNueva, ultimaVariacion: Timestamp.now(), ultimoUsuario: usuario });
     await addDoc(collection(db, "historial"), {
       bebidaId: seleccionada.id, bebidaNombre: seleccionada.nombre, categoria: seleccionada.categoria,
       tipo: ajuste.tipo, cantidad: cant, cantidadAnterior: cantAnterior, cantidadNueva: cantNueva,
@@ -277,10 +277,11 @@ export default function StockBebidas() {
       "Valor Total (€)": +(b.cantidad * b.precio).toFixed(2),
       "Estado": estadoConfig[getEstado(b.cantidad, b.minimo)].label,
       "Últ. variación": fmtFecha(b.ultimaVariacion),
+      "Modificado por": b.ultimoUsuario || "—",
     }));
     const wb = XLSX.utils.book_new();
     const ws1 = XLSX.utils.json_to_sheet(data);
-    ws1["!cols"] = [{ wch:22 },{ wch:20 },{ wch:18 },{ wch:10 },{ wch:10 },{ wch:14 },{ wch:12 },{ wch:14 },{ wch:14 },{ wch:18 }];
+    ws1["!cols"] = [{ wch:22 },{ wch:20 },{ wch:18 },{ wch:10 },{ wch:10 },{ wch:14 },{ wch:12 },{ wch:14 },{ wch:14 },{ wch:18 },{ wch:16 }];
     XLSX.utils.book_append_sheet(wb, ws1, "Stock Bebidas");
     XLSX.writeFile(wb, `stock-bebidas-${today()}.xlsx`);
     showToast("Excel exportado");
@@ -461,7 +462,12 @@ export default function StockBebidas() {
                     {b.ultimaVariacion
                       ? (() => {
                           const d = b.ultimaVariacion.toDate ? b.ultimaVariacion.toDate() : new Date(b.ultimaVariacion);
-                          return d.toLocaleDateString("es-ES", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
+                          return (
+                            <div>
+                              <div>{d.toLocaleDateString("es-ES", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" })}</div>
+                              {b.ultimoUsuario && <div style={{ color:"#4a5580", fontSize:10, marginTop:2 }}>👤 {b.ultimoUsuario}</div>}
+                            </div>
+                          );
                         })()
                       : <span style={{ color:"#3a4460" }}>—</span>
                     }
