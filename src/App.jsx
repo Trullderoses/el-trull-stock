@@ -195,7 +195,7 @@ export default function StockBebidas() {
   };
 
   const abrirNueva = () => { setForm({ nombre:"", categoria:categorias[0], cantidad:"", minimo:"", unidad:"botellas", precio:"", proveedor:"" }); setModal("nueva"); };
-  const abrirEditar = (b) => { setSeleccionada(b); setForm({ nombre:b.nombre, categoria:b.categoria, cantidad:b.cantidad, minimo:b.minimo, unidad:b.unidad, precio:b.precio, proveedor:b.proveedor||"" }); setModal("editar"); };
+  const abrirEditar = (b) => { setSeleccionada(b); setForm({ nombre:b.nombre, categoria:b.categoria, cantidad:b.cantidad, minimo:b.minimo, unidad:b.unidad, precio:b.precio, proveedor:b.proveedor||"" }); cargarUltimoMov(b.id); setModal("editar"); };
   const abrirAjuste = (b) => { setSeleccionada(b); setAjuste({ tipo:"entrada", cantidad:"", nota:"" }); setModal("ajuste"); };
   const abrirFicha = (b) => { setSeleccionada(b); cargarUltimoMov(b.id); setModal("ficha"); };
 
@@ -572,7 +572,35 @@ export default function StockBebidas() {
                 </div>
               </div>
             </div>
-            <div style={{ display:"flex", gap:10, marginTop:22, justifyContent:"flex-end" }}>
+
+            {/* Último movimiento en editar */}
+            {modal === "editar" && (
+              <div style={{ marginTop:18, background:"#0f1420", borderRadius:12, padding:"14px 16px", border:"1px solid #1a2035" }}>
+                <h3 style={{ fontSize:12, fontWeight:600, color:"#a78bfa", marginBottom:10, textTransform:"uppercase", letterSpacing:"0.08em" }}>Último movimiento</h3>
+                {ultimoMov ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span className="pill" style={{ background:ultimoMov.tipo==="entrada"?"rgba(52,211,153,0.15)":"rgba(255,59,92,0.15)", color:ultimoMov.tipo==="entrada"?"#34d399":"#ff3b5c" }}>
+                        {ultimoMov.tipo === "entrada" ? "📥 Entrada" : "📤 Salida"}
+                      </span>
+                      <span style={{ fontWeight:600, fontSize:15, color:ultimoMov.tipo==="entrada"?"#34d399":"#ff3b5c" }}>
+                        {ultimoMov.tipo==="entrada"?"+":"-"}{ultimoMov.cantidad} {ultimoMov.unidad}
+                      </span>
+                      <span style={{ fontSize:12, color:"#7a84a0" }}>{ultimoMov.cantidadAnterior} → {ultimoMov.cantidadNueva}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:16, fontSize:12, color:"#5a6480" }}>
+                      <span>📅 {fmtFecha(ultimoMov.fecha)}</span>
+                      <span>👤 {ultimoMov.usuario}</span>
+                    </div>
+                    {ultimoMov.nota && <div style={{ fontSize:12, color:"#4a5580", fontStyle:"italic" }}>"{ultimoMov.nota}"</div>}
+                  </div>
+                ) : (
+                  <p style={{ fontSize:13, color:"#3a4460" }}>Sin movimientos registrados</p>
+                )}
+              </div>
+            )}
+
+            <div style={{ display:"flex", gap:10, marginTop:18, justifyContent:"flex-end" }}>
               <button className="btn" onClick={() => setModal(null)} style={{ background:"#1e2540", color:"#7a84a0", padding:"10px 18px", fontSize:13 }}>Cancelar</button>
               <button className="btn" onClick={modal === "nueva" ? guardarNueva : guardarEditar} style={{ background:"#4f7fff", color:"white", padding:"10px 20px", fontSize:13 }}>
                 {modal === "nueva" ? "Añadir" : "Guardar"}
